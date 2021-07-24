@@ -877,15 +877,6 @@ static tmbchar LastChar( tmbstr str )
     return 0;
 }
 
-/*
-   node->type is one of these:
-
-    #define TextNode    1
-    #define StartTag    2
-    #define EndTag      3
-    #define StartEndTag 4
-*/
-
 Lexer* TY_(NewLexer)( TidyDocImpl* doc )
 {
     Lexer* lexer = (Lexer*) TidyDocAlloc( doc, sizeof(Lexer) );
@@ -1545,13 +1536,7 @@ void TY_(FreeNode)( TidyDocImpl* doc, Node *node )
         }
     }
 #endif
-    /* this is no good ;=((
-    if (node && doc && doc->lexer) {
-        if (node == doc->lexer->token) {
-            doc->lexer->token = NULL; // TY_(NewNode)( doc->lexer->allocator, doc->lexer );
-        }
-    }
-      ----------------- */
+
     while ( node )
     {
         Node* next = node->next;

@@ -837,6 +837,7 @@ void TY_(FreeParserStack)( TidyDocImpl* doc )
 
 /**
  *  Increase the stack size.
+ *  TODO: don't overflow max_uint. Need a message when we can no longer increase the size beyond 429 million depth.
  */
 static void growParserStack( TidyDocImpl* doc )
 {
@@ -984,6 +985,9 @@ static void ParseTag( TidyDocImpl* doc, Node *node, GetTokenMode mode )
  *  information back and forth in the TidyDocImpl's `stack`, which resides on
  *  the heap and prevents recursion and stack exhaustion, and also works well
  *  with the old-style parsers that do recurse.
+ *
+ *  (The goal is to update the old-style parsers slowly and deliberately
+ *  without causing regressions, in a series of smaller commits and updates.)
  */
 void ParseHTMLWithNode( TidyDocImpl* doc, Node* node )
 {
@@ -5639,6 +5643,9 @@ Node* TY_(ParseHead)( TidyDocImpl* doc, Node *head, GetTokenMode ARG_UNUSED(mode
  */
 Node* TY_(ParseBody)( TidyDocImpl* doc, Node *body, GetTokenMode mode, Bool popStack )
 {
+    TY_(oldParseBody)( doc, body, mode);
+    return NULL;
+    
     Lexer* lexer = doc->lexer;
     Node *node = NULL;
     Bool checkstack, iswhitenode;
@@ -6504,9 +6511,7 @@ void TY_(ParseDocument)(TidyDocImpl* doc)
 
         if (node->type == StartTag && nodeIsHTML(node))
         {
-            AttVal *xmlns;
-
-            xmlns = TY_(AttrGetById)(node, TidyAttr_XMLNS);
+            AttVal *xmlns = TY_(AttrGetById)(node, TidyAttr_XMLNS);
 
             if (AttrValueIs(xmlns, XHTML_NAMESPACE))
             {

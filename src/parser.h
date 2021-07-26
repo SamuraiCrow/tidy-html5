@@ -164,7 +164,7 @@ TY_PRIVATE Node *TY_(RemoveNode)(Node *node);
 
 /**
  *  Remove node from markup tree and discard it.
- *  @param doc The Tidy document from which to discarb the node.
+ *  @param doc The Tidy document from which to discard the node.
  *  @param element The node to discard.
  *  @returns Returns the next node.
  */

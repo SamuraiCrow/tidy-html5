@@ -2230,32 +2230,6 @@ void* TY_(oldParseInline)( TidyDocImpl* doc, Node *element, GetTokenMode mode )
 }
 
 
-/** MARK: TY_(oldParseEmpty)
- *  Parse empty element nodes.
- */
-void* TY_(oldParseEmpty)(TidyDocImpl* doc, Node *element, GetTokenMode mode)
-{
-    Lexer* lexer = doc->lexer;
-    if ( lexer->isvoyager )
-    {
-        Node *node = TY_(GetToken)( doc, mode);
-        if ( node )
-        {
-            if ( !(node->type == EndTag && node->tag == element->tag) )
-            {
-                /* TY_(Report)(doc, element, node, ELEMENT_NOT_EMPTY); */
-                TY_(UngetToken)( doc );
-            }
-            else
-            {
-                TY_(FreeNode)( doc, node );
-            }
-        }
-    }
-    return NULL;
-}
-
-
 /** MARK: TY_(oldParseDefList)
  *  Parses the `dl` tag.
  */
@@ -5473,10 +5447,27 @@ Node* TY_(ParseInline)( TidyDocImpl *doc, Node *node, GetTokenMode mode, Bool po
 
 /** MARK: TY_(ParseEmpty)
  *  Parse empty element nodes.
- */
+ *  @note This is a non-recursive parser.
+  */
 Node* TY_(ParseEmpty)( TidyDocImpl* doc, Node *element, GetTokenMode mode, Bool popStack )
 {
-    TY_(oldParseEmpty)( doc, element, mode );
+    Lexer* lexer = doc->lexer;
+    if ( lexer->isvoyager )
+    {
+        Node *node = TY_(GetToken)( doc, mode);
+        if ( node )
+        {
+            if ( !(node->type == EndTag && node->tag == element->tag) )
+            {
+                /* TY_(Report)(doc, element, node, ELEMENT_NOT_EMPTY); */
+                TY_(UngetToken)( doc );
+            }
+            else
+            {
+                TY_(FreeNode)( doc, node );
+            }
+        }
+    }
     return NULL;
 }
 

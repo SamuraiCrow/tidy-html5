@@ -1617,138 +1617,6 @@ void* TY_(oldParseBlock)( TidyDocImpl* doc, Node *element, GetTokenMode mode)
 }
 
 
-/** MARK: TY_(oldParseNamespace)
- *  Act as a generic XML (sub)tree parser: collect each node and add it
- *  to the DOM, without any further validation.
- *  @todo Add schema- or other-hierarchy-definition-based validation
- *    of the subtree here.
- */
-void* TY_(oldParseNamespace)(TidyDocImpl* doc, Node *basenode, GetTokenMode mode)
-{
-    Lexer* lexer = doc->lexer;
-    Node *node;
-    Node *parent = basenode;
-    uint istackbase;
-    AttVal* av; /* #130 MathML attr and entity fix! */
-
-    /* a la <table>: defer popping elements off the inline stack */
-    TY_(DeferDup)( doc );
-    istackbase = lexer->istackbase;
-    lexer->istackbase = lexer->istacksize;
-
-    mode = OtherNamespace; /* Preformatted; IgnoreWhitespace; */
-
-    while ((node = TY_(GetToken)(doc, mode)) != NULL)
-    {
-        /*
-        fix check to skip action in InsertMisc for regular/empty
-        nodes, which we don't want here...
-
-        The way we do it here is by checking and processing everything
-        and only what remains goes into InsertMisc()
-        */
-
-        /* is this a close tag? And does it match the current parent node? */
-        if (node->type == EndTag)
-        {
-            /*
-            to prevent end tags flowing from one 'alternate namespace' we
-            check this in two phases: first we check if the tag is a
-            descendant of the current node, and when it is, we check whether
-            it is the end tag for a node /within/ or /outside/ the basenode.
-            */
-            Bool outside;
-            Node *mp = FindMatchingDescendant(parent, node, basenode, &outside);
-
-            if (mp != NULL)
-            {
-                /*
-                when mp != parent as we might expect,
-                infer end tags until we 'hit' the matched
-                parent or the basenode
-                */
-                Node *n;
-
-                for (n = parent;
-                     n != NULL && n != basenode->parent && n != mp;
-                     n = n->parent)
-                {
-                    /* n->implicit = yes; */
-                    n->closed = yes;
-                    TY_(Report)(doc, n->parent, n, MISSING_ENDTAG_BEFORE);
-                }
-
-                /* Issue #369 - Since 'assert' is DEBUG only, and there are
-                   simple cases where these can be fired, removing them
-                   pending feedback from the original author!
-                   assert(outside == no ? n == mp : 1);
-                   assert(outside == yes ? n == basenode->parent : 1);
-                   =================================================== */
-
-                if (outside == no)
-                {
-                    /* EndTag for a node within the basenode subtree. Roll on... */
-                    n->closed = yes;
-                    TY_(FreeNode)(doc, node);
-
-                    node = n;
-                    parent = node->parent;
-                }
-                else
-                {
-                    /* EndTag for a node outside the basenode subtree: let the caller handle that. */
-                    TY_(UngetToken)( doc );
-                    node = basenode;
-                    parent = node->parent;
-                }
-
-                /* when we've arrived at the end-node for the base node, it's quitting time */
-                if (node == basenode)
-                {
-                    lexer->istackbase = istackbase;
-                    assert(basenode->closed == yes);
-                    return NULL;
-                }
-            }
-            else
-            {
-                /* unmatched close tag: report an error and discard */
-                /* TY_(Report)(doc, parent, node, NON_MATCHING_ENDTAG); Issue #308 - Seems wrong warning! */
-                TY_(Report)(doc, parent, node, DISCARDING_UNEXPECTED);
-                assert(parent);
-                /* assert(parent->tag != node->tag); Issue #308 - Seems would always be true! */
-                TY_(FreeNode)( doc, node); /* Issue #308 - Discard unexpected end tag memory */
-            }
-        }
-        else if (node->type == StartTag)
-        {
-            /* #130 MathML attr and entity fix!
-               care if it has attributes, and 'accidently' any of those attributes match known */
-            for ( av = node->attributes; av; av = av->next )
-            {
-                av->dict = 0; /* does something need to be freed? */
-            }
-            /* add another child to the current parent */
-            TY_(InsertNodeAtEnd)(parent, node);
-            parent = node;
-        }
-        else
-        {
-            /* #130 MathML attr and entity fix!
-               care if it has attributes, and 'accidently' any of those attributes match known */
-            for ( av = node->attributes; av; av = av->next )
-            {
-                av->dict = 0; /* does something need to be freed? */
-            }
-            TY_(InsertNodeAtEnd)(parent, node);
-        }
-    }
-
-    TY_(Report)(doc, basenode->parent, basenode, MISSING_ENDTAG_FOR);
-    return NULL;
-}
-
-
 /** MARK: TY_(oldParseInline)
  *  Parse inline element nodes.
  */
@@ -5459,13 +5327,136 @@ SPRTF("Exit ParseBlock 9b %d...\n",in_parse_block);
 
 /** MARK: TY_(ParseNamespace)
  *  Act as a generic XML (sub)tree parser: collect each node and add it
- *  to the DOM, without any further validation.
+ *  to the DOM, without any further validation. It's useful for tags that
+ *  have XML-like content, such as `svg` and `math`.
+ *  @note Perhaps this is poorly named, as we're not parsing the namespace
+ *    of a particular tag, but a tag with XML-like content.
+ *  @note This is a non-recursive parser.
  *  @todo Add schema- or other-hierarchy-definition-based validation
  *    of the subtree here.
  */
 Node* TY_(ParseNamespace)( TidyDocImpl* doc, Node *basenode, GetTokenMode mode, Bool popStack )
 {
-    TY_(oldParseNamespace)( doc, basenode, mode );
+    Lexer* lexer = doc->lexer;
+    Node *node;
+    Node *parent = basenode;
+    uint istackbase;
+    AttVal* av; /* #130 MathML attr and entity fix! */
+
+    /* a la <table>: defer popping elements off the inline stack */
+    TY_(DeferDup)( doc );
+    istackbase = lexer->istackbase;
+    lexer->istackbase = lexer->istacksize;
+
+    mode = OtherNamespace; /* Preformatted; IgnoreWhitespace; */
+
+    while ((node = TY_(GetToken)(doc, mode)) != NULL)
+    {
+        /*
+        fix check to skip action in InsertMisc for regular/empty
+        nodes, which we don't want here...
+
+        The way we do it here is by checking and processing everything
+        and only what remains goes into InsertMisc()
+        */
+
+        /* is this a close tag? And does it match the current parent node? */
+        if (node->type == EndTag)
+        {
+            /*
+            to prevent end tags flowing from one 'alternate namespace' we
+            check this in two phases: first we check if the tag is a
+            descendant of the current node, and when it is, we check whether
+            it is the end tag for a node /within/ or /outside/ the basenode.
+            */
+            Bool outside;
+            Node *mp = FindMatchingDescendant(parent, node, basenode, &outside);
+
+            if (mp != NULL)
+            {
+                /*
+                when mp != parent as we might expect,
+                infer end tags until we 'hit' the matched
+                parent or the basenode
+                */
+                Node *n;
+
+                for (n = parent;
+                     n != NULL && n != basenode->parent && n != mp;
+                     n = n->parent)
+                {
+                    /* n->implicit = yes; */
+                    n->closed = yes;
+                    TY_(Report)(doc, n->parent, n, MISSING_ENDTAG_BEFORE);
+                }
+
+                /* Issue #369 - Since 'assert' is DEBUG only, and there are
+                   simple cases where these can be fired, removing them
+                   pending feedback from the original author!
+                   assert(outside == no ? n == mp : 1);
+                   assert(outside == yes ? n == basenode->parent : 1);
+                   =================================================== */
+
+                if (outside == no)
+                {
+                    /* EndTag for a node within the basenode subtree. Roll on... */
+                    n->closed = yes;
+                    TY_(FreeNode)(doc, node);
+
+                    node = n;
+                    parent = node->parent;
+                }
+                else
+                {
+                    /* EndTag for a node outside the basenode subtree: let the caller handle that. */
+                    TY_(UngetToken)( doc );
+                    node = basenode;
+                    parent = node->parent;
+                }
+
+                /* when we've arrived at the end-node for the base node, it's quitting time */
+                if (node == basenode)
+                {
+                    lexer->istackbase = istackbase;
+                    assert(basenode->closed == yes);
+                    return NULL;
+                }
+            }
+            else
+            {
+                /* unmatched close tag: report an error and discard */
+                /* TY_(Report)(doc, parent, node, NON_MATCHING_ENDTAG); Issue #308 - Seems wrong warning! */
+                TY_(Report)(doc, parent, node, DISCARDING_UNEXPECTED);
+                assert(parent);
+                /* assert(parent->tag != node->tag); Issue #308 - Seems would always be true! */
+                TY_(FreeNode)( doc, node); /* Issue #308 - Discard unexpected end tag memory */
+            }
+        }
+        else if (node->type == StartTag)
+        {
+            /* #130 MathML attr and entity fix!
+               care if it has attributes, and 'accidently' any of those attributes match known */
+            for ( av = node->attributes; av; av = av->next )
+            {
+                av->dict = 0; /* does something need to be freed? */
+            }
+            /* add another child to the current parent */
+            TY_(InsertNodeAtEnd)(parent, node);
+            parent = node;
+        }
+        else
+        {
+            /* #130 MathML attr and entity fix!
+               care if it has attributes, and 'accidently' any of those attributes match known */
+            for ( av = node->attributes; av; av = av->next )
+            {
+                av->dict = 0; /* does something need to be freed? */
+            }
+            TY_(InsertNodeAtEnd)(parent, node);
+        }
+    }
+
+    TY_(Report)(doc, basenode->parent, basenode, MISSING_ENDTAG_FOR);
     return NULL;
 }
 

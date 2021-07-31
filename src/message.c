@@ -50,9 +50,9 @@ static char* TagToString(Node* tag, char* buf, size_t count)
         else if (tag->type == DocTypeTag)
             TY_(tmbsnprintf)(buf, count, "<!DOCTYPE>");
         else if (tag->type == TextNode)
-            TY_(tmbsnprintf)(buf, count, "%s", tidyLocalizedString(STRING_PLAIN_TEXT));
+            TY_(tmbsnprintf)(buf, count, "%s", "STRING_PLAIN_TEXT");
         else if (tag->type == XmlDecl)
-            TY_(tmbsnprintf)(buf, count, "%s", tidyLocalizedString(STRING_XML_DECLARATION));
+            TY_(tmbsnprintf)(buf, count, "%s", "STRING_XML_DECLARATION");
         else if (tag->element)
             TY_(tmbsnprintf)(buf, count, "%s", tag->element);
     }
@@ -792,7 +792,7 @@ TidyMessageImpl *formatStandard(TidyDocImpl* doc, Node *element, Node *node, uin
 
         case TAG_NOT_ALLOWED_IN:
             /* Can we use `rpt` here? No; `element` has a value in every case. */
-            return TY_(tidyMessageCreateWithNode)(doc, node, code, level, nodedesc, element->element );
+            return TY_(tidyMessageCreateWithNode)(doc, node, code, level, nodedesc, element ? element->element : NULL );
 
         case INSERTING_TAG:
         case MISSING_STARTTAG:
@@ -804,7 +804,7 @@ TidyMessageImpl *formatStandard(TidyDocImpl* doc, Node *element, Node *node, uin
 
         case UNEXPECTED_ENDTAG_IN:
             /* Can we use `rpt` here? No; `element` has a value in every case. */
-            return TY_(tidyMessageCreateWithNode)(doc, node, code, level, node->element, element->element );
+            return TY_(tidyMessageCreateWithNode)(doc, node, code, level, node->element, element ? element->element : NULL );
 
         case BAD_CDATA_CONTENT:
         case CONTENT_AFTER_BODY:
@@ -848,16 +848,16 @@ TidyMessageImpl *formatStandard(TidyDocImpl* doc, Node *element, Node *node, uin
         case MISSING_ENDTAG_FOR:
         case MISSING_ENDTAG_OPTIONAL:
         case PREVIOUS_LOCATION:
-            return TY_(tidyMessageCreateWithNode)(doc, rpt, code, level, element->element );
+            return TY_(tidyMessageCreateWithNode)(doc, rpt, code, level, element? element->element : NULL );
 
         case MISSING_ENDTAG_BEFORE:
-            return TY_(tidyMessageCreateWithNode)(doc, rpt, code, level, element->element, nodedesc );
+            return TY_(tidyMessageCreateWithNode)(doc, rpt, code, level, element? element->element : NULL, nodedesc );
 
         case COERCE_TO_ENDTAG:
         case NON_MATCHING_ENDTAG:
             return TY_(tidyMessageCreateWithNode)(doc, rpt, code, level, node->element, node->element );
         case TOO_MANY_ELEMENTS_IN:
-            return TY_(tidyMessageCreateWithNode)(doc, rpt, code, level, node->element, element->element);
+            return TY_(tidyMessageCreateWithNode)(doc, rpt, code, level, node->element, element ? element->element : NULL);
 
     }
 
@@ -1070,7 +1070,7 @@ static struct _dialogueDispatchTable {
 
 
 /* This message formatter for dialogue messages should be capable of formatting
-** every message, because they're not all the complex and there aren't that
+** every message, because they're not all that complex and there aren't that
 ** many.
 */
 static TidyMessageImpl *formatDialogue( TidyDocImpl* doc, uint code, TidyReportLevel level, va_list args )
@@ -1087,8 +1087,8 @@ static TidyMessageImpl *formatDialogue( TidyDocImpl* doc, uint code, TidyReportL
         case STRING_ERROR_COUNT:
         case STRING_NOT_ALL_SHOWN:
             return TY_(tidyMessageCreate)( doc, code, level,
-                                           doc->warnings, tidyLocalizedStringN( STRING_ERROR_COUNT_WARNING, doc->warnings ),
-                                           doc->errors, tidyLocalizedStringN( STRING_ERROR_COUNT_ERROR, doc->errors ) );
+                                           doc->warnings, "STRING_ERROR_COUNT_WARNING",
+                                           doc->errors, "STRING_ERROR_COUNT_ERROR" );
 
         case FOOTNOTE_TRIM_EMPTY_ELEMENT:
         case STRING_HELLO_ACCESS:
@@ -1504,7 +1504,7 @@ uint TY_(getNextErrorCode)( TidyIterator* iter )
     }
     
     *iter = (TidyIterator)( itemIndex <= tidyErrorCodeListSize() ? itemIndex : (size_t)0 );
-    return item->value;
+    return item ? item->value : 0;
 }
 
 

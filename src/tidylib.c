@@ -112,6 +112,7 @@ TidyDocImpl* tidyDocCreate( TidyAllocator *allocator )
     TY_(InitAttrs)( doc );
     TY_(InitConfig)( doc );
     TY_(InitPrintBuf)( doc );
+    TY_(InitParserStack)( doc );
 
     /* Set the locale for tidy's output. This both configures
     ** LibTidy to use the environment's locale as well as the
@@ -172,6 +173,7 @@ void          tidyDocRelease( TidyDocImpl* doc )
          *  to determine which hash is to be used, so free it last.
         \*/
         TY_(FreeLexer)( doc );
+        TY_(FreeParserStack)( doc );
         TidyDocFree( doc, doc );
     }
 }
@@ -1628,15 +1630,19 @@ static Bool nodeHasAlignAttr( Node *node )
  */
 static void TY_(CheckHTML5)( TidyDocImpl* doc, Node* node )
 {
+    Stack *stack = TY_(newStack)(doc, 16);
     Bool clean = cfgBool( doc, TidyMakeClean );
     Bool already_strict = cfgBool( doc, TidyStrictTagsAttr );
     Node* body = TY_(FindBody)( doc );
+    Node* next;
     Bool warn = yes;    /* should this be a warning, error, or report??? */
     AttVal* attr = NULL;
     int i = 0;
 
     while (node)
     {
+        next = node->next;
+        
         if ( nodeHasAlignAttr( node ) ) {
             /* @todo: Is this for ALL elements that accept an 'align' attribute,
              * or should this be a sub-set test?
@@ -1790,10 +1796,15 @@ static void TY_(CheckHTML5)( TidyDocImpl* doc, Node* node )
             }
 
         if (node->content)
-            TY_(CheckHTML5)( doc, node->content );
-        
-        node = node->next;
+        {
+            TY_(push)(stack, next);
+            node = node->content;
+            continue;
+        }
+
+        node = next ? next : TY_(pop)(stack);
     }
+    TY_(freeStack)(stack);
 }
 /*****************************************************************************
  *  END HTML5 STUFF
@@ -1814,6 +1825,8 @@ static void TY_(CheckHTML5)( TidyDocImpl* doc, Node* node )
  */
 static void TY_(CheckHTMLTagsAttribsVersions)( TidyDocImpl* doc, Node* node )
 {
+    Stack *stack = TY_(newStack)(doc, 16);
+    Node *next;
     uint versionEmitted = doc->lexer->versionEmitted;
     uint declared = doc->lexer->doctype;
     uint version = versionEmitted == 0 ? declared : versionEmitted;
@@ -1828,6 +1841,8 @@ static void TY_(CheckHTMLTagsAttribsVersions)( TidyDocImpl* doc, Node* node )
 
     while (node)
     {
+        next = node->next;
+
         /* This bit here handles our HTML tags */
         if ( TY_(nodeIsElement)(node) && node->tag ) {
 
@@ -1912,10 +1927,15 @@ static void TY_(CheckHTMLTagsAttribsVersions)( TidyDocImpl* doc, Node* node )
         }
 
         if (node->content)
-            TY_(CheckHTMLTagsAttribsVersions)( doc, node->content );
-        
-        node = node->next;
+        {
+            TY_(push)(stack, next);
+            node = node->content;
+            continue;
+        }
+
+        node = next ? next : TY_(pop)(stack);
     }
+    TY_(freeStack)(stack);
 }
 
 
@@ -2639,6 +2659,11 @@ ctmbstr TIDY_CALL tidyLocalizedStringN( uint messageType, uint quantity )
 ctmbstr TIDY_CALL tidyLocalizedString( uint messageType )
 {
     return TY_(tidyLocalizedString)( messageType );
+}
+
+ctmbstr TIDY_CALL tidyDefaultStringN( uint messageType, uint quantity )
+{
+    return TY_(tidyDefaultStringN)( messageType, quantity);
 }
 
 ctmbstr TIDY_CALL tidyDefaultString( uint messageType )

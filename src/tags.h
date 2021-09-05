@@ -67,7 +67,7 @@ typedef enum
  ** @param popStack A flag indicating that we are re-entering this parser, and
  **   it should restore a state from the stack.
  */
-typedef Node* (Parser)( TidyDocImpl* doc, Node *node, GetTokenMode mode, Bool popStack );
+typedef Node* (Parser)( TidyDocImpl* doc, Node *node, GetTokenMode mode );
 
 
 /** This typedef describes a function be be used to check the attributes
@@ -463,6 +463,7 @@ TY_PRIVATE uint TY_(nodeHeaderLevel)( Node* node );
 #define nodeIsDATALIST( node )   TagIsId( node, TidyTag_DATALIST )
 #define nodeIsDATA( node )       TagIsId( node, TidyTag_DATA )
 #define nodeIsMATHML( node )     TagIsId( node, TidyTag_MATHML ) /* #130 MathML attr and entity fix! */
+#define nodeIsTEMPLATE( node )   TagIsId( node, TidyTag_TEMPLATE )
 
 /* NOT in HTML 5 */
 #define nodeIsACRONYM( node )    TagIsId( node, TidyTag_ACRONYM )
